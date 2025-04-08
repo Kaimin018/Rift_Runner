@@ -5,13 +5,16 @@ import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockCont
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xeeeeee);
 
-// 加入一個物體（例如立方體）
+// 加入一個cube
 const geometry = new THREE.BoxGeometry();
-const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+const material = new THREE.MeshStandardMaterial({ color: 0x808080 });
 const cube = new THREE.Mesh(geometry, material);
 scene.add(cube);
 
-// 攝影機 (模擬第一人稱眼睛高度)
+// 顯示 cube 模型以恢復第三人稱視角
+cube.visible = true;
+
+// 攝影機位於cube斜後方
 const groundLevel = 1.6;
 const camera = new THREE.PerspectiveCamera(
   75,
@@ -19,7 +22,55 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-camera.position.set(0, groundLevel, 10);
+camera.position.set(-5, groundLevel + 2, 5); // 從斜後方看
+
+// 更新攝影機位置以跟隨物體並恢復斜後方視角
+function updateCameraPosition() {
+  if (cube) {
+    const offset = new THREE.Vector3(-5, 2, 5); // 攝影機相對於 cube 的偏移量
+    camera.position.copy(cube.position.clone().add(offset)); // 更新攝影機位置
+    camera.lookAt(cube.position); // 攝影機始終看向 cube
+  }
+}
+
+// 在動畫循環中加入攝影機更新
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+
+  // 更新物體移動邏輯
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward); // 使用攝影機的方向
+  forward.y = 0;
+  forward.normalize();
+
+  const right = new THREE.Vector3();
+  right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+  const movement = new THREE.Vector3();
+  if (move.forward) movement.add(forward);
+  if (move.backward) movement.sub(forward);
+  if (move.left) movement.sub(right);
+  if (move.right) movement.add(right);
+
+  if (movement.length() > 0) {
+    movement.normalize();
+    movement.multiplyScalar(speed * delta);
+    cube.position.add(movement);
+  }
+
+  velocityY += gravity * delta;
+  cube.position.y += velocityY * delta;
+
+  if (cube.position.y < groundLevel) {
+    cube.position.y = groundLevel;
+    velocityY = 0;
+  }
+
+  updateGroundCollision();
+  updateCameraPosition(); // 更新攝影機位置
+  renderer.render(scene, camera);
+}
 camera.lookAt(cube.position);
 
 // 渲染器
@@ -33,6 +84,25 @@ scene.add(controls.object);
 document.addEventListener('click', () => {
   controls.lock();  // 點擊後鎖定滑鼠以捕捉滑鼠移動
 }, false);
+
+let pitch = 0;
+
+// --- 加入滑鼠旋轉視角功能 ---
+document.addEventListener('mousemove', (event) => {
+  if (controls.isLocked) {
+    const movementX = event.movementX || 0;
+    const movementY = event.movementY || 0;
+
+    // 水平旋轉 cube 和攝影機
+    cube.rotation.y -= movementX * 0.002;
+
+    // 垂直旋轉攝影機
+    camera.rotation.x -= movementY * 0.002;
+
+    // 限制垂直旋轉角度在 -90° 到 90° 之間
+    camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+  }
+});
 
 // --- 加入平面與光源 ---
 // 地板平面
@@ -154,52 +224,8 @@ function updateGroundCollision() {
 // --- 主動畫循環 ---
 // 使用 clock 來計算每一幀的時間差，方便以速度（單位/秒）計算位移
 const clock = new THREE.Clock();
-const speed = 15; // 每秒移動的單位距離
+const speed = 10; // 每秒移動的單位距離
 
-function animate() {
-  requestAnimationFrame(animate);
-  const delta = clock.getDelta(); // 獲得上一次更新至今的秒數
-
-  // 每一幀根據攝影機的方向重新計算移動向量
-  const forward = new THREE.Vector3();
-  cube.getWorldDirection(forward);
-  forward.y = 0;        // 移除上下分量，只考慮水平面
-  forward.normalize();  // 正規化向量
-
-  // 右向量 = forward 與全域上方向 (0,1,0) 的叉積
-  const right = new THREE.Vector3();
-  right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
-
-  const object = controls.object;
-  
-  // 合成移動向量，根據按鍵狀態
-  const movement = new THREE.Vector3();
-  if (move.forward) movement.add(forward);
-  if (move.backward) movement.sub(forward);
-  if (move.left) movement.sub(right);
-  if (move.right) movement.add(right);
-
-  if (movement.length() > 0) {
-    movement.normalize();                // 確保移動方向單位長度
-    movement.multiplyScalar(speed * delta); // 以速度與幀時間計算位移
-    object.position.add(movement);      // 更新攝影機位置
-  }
-
-  // 跳躍與重力更新
-  velocityY += gravity * delta;         // 更新垂直速度 (重力影響)
-  cube.position.y += velocityY * delta; // 更新攝影機垂直位置
-
-  // 跳躍與重力更新
-  object.position.y += velocityY * delta;
-  if (object.position.y < groundLevel) {
-    object.position.y = groundLevel;
-    velocityY = 0;
-  }
-
-  updateGroundCollision(); // 加這行讓人「踩得上錐體」
-
-  renderer.render(scene, camera);
-}
 
 addGroundCones(scene); // 在地面上隨機放置三角形
 animate();
