@@ -6,7 +6,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xeeeeee);
 
 // 加入一個cube
-const geometry = new THREE.BoxGeometry();
+const geometry = new THREE.BoxGeometry(1, 1, 1);
 const material = new THREE.MeshStandardMaterial({ color: 0x808080 });
 const cube = new THREE.Mesh(geometry, material);
 scene.add(cube);
@@ -22,14 +22,25 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   1000
 );
-camera.position.set(-5, groundLevel + 2, 5); // 從斜後方看
+camera.position.set(0, groundLevel + 2, 5); // 從斜後方看
 
 // 更新攝影機位置以跟隨物體並恢復斜後方視角
 function updateCameraPosition() {
   if (cube) {
-    const offset = new THREE.Vector3(-5, 2, 5); // 攝影機相對於 cube 的偏移量
-    camera.position.copy(cube.position.clone().add(offset)); // 更新攝影機位置
-    camera.lookAt(cube.position); // 攝影機始終看向 cube
+    // 計算相對於立方體的偏移位置
+    const offsetDistance = 5; // 距離
+    const offsetHeight = 2;   // 高度偏移
+    
+    // 獲取立方體的前進方向（假設立方體的 z 軸負方向是前方）
+    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(cube.quaternion);
+    
+    // 計算攝影機位置
+    camera.position.copy(cube.position)
+      .add(new THREE.Vector3(0, offsetHeight, 0)) // 高度偏移
+      .sub(direction.clone().multiplyScalar(offsetDistance)); // 後方距離
+    
+    // 攝影機看向立方體略高的位置
+    camera.lookAt(cube.position.clone().add(new THREE.Vector3(0, 1, 0)));
   }
 }
 
@@ -85,26 +96,25 @@ document.addEventListener('click', () => {
   controls.lock();  // 點擊後鎖定滑鼠以捕捉滑鼠移動
 }, false);
 
+// 旋轉參數
 let pitch = 0;
+let yaw = 0;
 
-// --- 加入滑鼠旋轉視角功能 ---
+// 滑鼠控制 box 旋轉
 document.addEventListener('mousemove', (event) => {
   if (controls.isLocked) {
     const movementX = event.movementX || 0;
     const movementY = event.movementY || 0;
 
-    // 水平旋轉 cube 和攝影機
-    cube.rotation.y -= movementX * 0.002;
+    yaw -= movementX * 0.002;
+    pitch -= movementY * 0.002;
+    pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
 
-    // 垂直旋轉攝影機
-    camera.rotation.x -= movementY * 0.002;
-
-    // 限制垂直旋轉角度在 -90° 到 90° 之間
-    camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+    cube.rotation.set(pitch, yaw, 0);
   }
 });
 
-// --- 加入平面與光源 ---
+// - --- 加入平面與光源 ---
 // 地板平面
 const planeGeometry = new THREE.PlaneGeometry(100, 100);
 const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x008000 });
